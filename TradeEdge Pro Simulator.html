@@ -1,0 +1,997 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TradeEdge Pro | Position Size, Risk-Reward & Compounding Simulator</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js for Equity Curve Simulation -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Phosphor Icons for clean trading UI icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <!-- Google Fonts: Inter & JetBrains Mono for numbers -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        slate: {
+                            850: '#131c2e',
+                            900: '#0f172a',
+                            950: '#080d1a',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom styling for sleek dark-mode range sliders & scrollbars */
+        body {
+            background-color: #080d1a;
+            color: #f8fafc;
+        }
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            background: #1e293b;
+            height: 6px;
+            border-radius: 999px;
+            outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #10b981;
+            cursor: pointer;
+            border: 2px solid #080d1a;
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+            transition: transform 0.15s ease;
+        }
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.15);
+        }
+        .glass-card {
+            background: rgba(19, 28, 46, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        /* Hide number input spinners for cleaner look */
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { 
+            -webkit-appearance: none; 
+            margin: 0; 
+        }
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
+    </style>
+</head>
+<body class="min-h-screen font-sans antialiased selection:bg-emerald-500 selection:text-slate-950 pb-12">
+
+    <!-- Top Toast Notification for Clipboard & Presets -->
+    <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none flex items-center gap-3 bg-emerald-500 text-slate-950 font-semibold px-5 py-3 rounded-xl shadow-2xl border border-emerald-400">
+        <i class="ph-fill ph-check-circle text-xl"></i>
+        <span id="toastMessage">Trade plan copied to clipboard!</span>
+    </div>
+
+    <!-- Header Navigation -->
+    <header class="sticky top-0 z-30 border-b border-slate-800/80 bg-slate-950/90 backdrop-blur-md">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-wrap items-center justify-between gap-4">
+            <!-- Brand Logo -->
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-cyan-500 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                    <i class="ph-bold ph-trend-up text-slate-950 text-2xl"></i>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h1 class="text-lg sm:text-xl font-bold tracking-tight text-white">TradeEdge <span class="text-emerald-400">Pro</span></h1>
+                        <span class="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">v2.4 Live</span>
+                    </div>
+                    <p class="text-xs text-slate-400 hidden sm:block">Position Sizing, Indian Statutory Tax & Monte Carlo Compounding Engine</p>
+                </div>
+            </div>
+
+            <!-- Market Mode Presets & Currency Switcher -->
+            <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+                <!-- Market Segment Tabs -->
+                <div class="inline-flex p-1 rounded-xl bg-slate-900 border border-slate-800 text-xs font-medium">
+                    <button onclick="setMarketMode('INTRADAY')" id="mode-INTRADAY" class="mode-btn px-3 py-1.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold transition-all">
+                        Intraday (MIS)
+                    </button>
+                    <button onclick="setMarketMode('DELIVERY')" id="mode-DELIVERY" class="mode-btn px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition-all">
+                        Delivery (CNC)
+                    </button>
+                    <button onclick="setMarketMode('FNO')" id="mode-FNO" class="mode-btn px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition-all">
+                        F&O Options
+                    </button>
+                    <button onclick="setMarketMode('GLOBAL')" id="mode-GLOBAL" class="mode-btn px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition-all">
+                        Global / Crypto
+                    </button>
+                </div>
+
+                <!-- Currency Switcher -->
+                <div class="inline-flex p-1 rounded-xl bg-slate-900 border border-slate-800 text-xs font-mono">
+                    <button onclick="setCurrency('INR')" id="curr-INR" class="px-2.5 py-1.5 rounded-lg bg-slate-800 text-emerald-400 font-bold transition-all">₹ INR</button>
+                    <button onclick="setCurrency('USD')" id="curr-USD" class="px-2.5 py-1.5 rounded-lg text-slate-400 hover:text-white transition-all">$ USD</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
+
+        <!-- Top Sponsored / AdSense Placeholder Slot (Monetization Ready) -->
+        <div class="w-full rounded-xl border border-dashed border-slate-800 bg-slate-900/40 p-3 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400">
+            <div class="flex items-center gap-2.5">
+                <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-400 font-mono text-[10px] uppercase">Sponsored</span>
+                <span>Zero Brokerage on Delivery Trades & Flat ₹20 Intraday — <strong class="text-slate-200">Open Your Trading Account or Place Your AdSense 728x90 Code Here</strong></span>
+            </div>
+            <a href="#monetization-info" onclick="showToast('Replace this link in index.html with your broker affiliate URL or AdSense tag!')" class="shrink-0 px-3 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 font-medium transition">
+                Affiliate / Ad Slot <i class="ph ph-arrow-up-right inline"></i>
+            </a>
+        </div>
+
+        <!-- Main 12-Column Responsive Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+            <!-- LEFT PANEL (5 Cols): Position Size Inputs & Indian Brokerage Breakdown -->
+            <div class="lg:col-span-5 space-y-6">
+                
+                <!-- Card 1: Trade Setup Parameters -->
+                <div class="glass-card rounded-2xl p-5 sm:p-6 shadow-xl">
+                    <div class="flex items-center justify-between mb-5">
+                        <div class="flex items-center gap-2">
+                            <i class="ph-duotone ph-sliders-horizontal text-emerald-400 text-xl"></i>
+                            <h2 class="text-base font-bold text-white">Trade Setup & Risk Inputs</h2>
+                        </div>
+                        <!-- Auto Detected Trade Direction Badge -->
+                        <div id="directionBadge" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                            <i class="ph-bold ph-trend-up"></i>
+                            <span>LONG (BUY)</span>
+                        </div>
+                    </div>
+
+                    <div class="space-y-5">
+                        <!-- Account Capital -->
+                        <div>
+                            <div class="flex justify-between text-xs mb-1.5">
+                                <label for="capitalInput" class="text-slate-300 font-medium">Total Account Capital</label>
+                                <span class="text-slate-400 font-mono" id="capitalQuickBtns">
+                                    <button onclick="setQuickCapital(50000)" class="hover:text-emerald-400 underline mr-2">50K</button>
+                                    <button onclick="setQuickCapital(100000)" class="hover:text-emerald-400 underline mr-2">1L</button>
+                                    <button onclick="setQuickCapital(500000)" class="hover:text-emerald-400 underline">5L</button>
+                                </span>
+                            </div>
+                            <div class="relative flex items-center">
+                                <span class="curr-symbol absolute left-3.5 text-slate-400 font-mono text-sm">₹</span>
+                                <input type="number" id="capitalInput" value="100000" min="1000" step="1000"
+                                    class="w-full pl-8 pr-4 py-2.5 bg-slate-900/90 border border-slate-700/80 rounded-xl text-white font-mono text-sm focus:outline-none focus:border-emerald-500 transition">
+                            </div>
+                            <input type="range" id="capitalSlider" min="10000" max="2000000" step="10000" value="100000" class="w-full mt-2">
+                        </div>
+
+                        <!-- Risk Per Trade (%) & Leverage Row -->
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <!-- Risk % -->
+                            <div class="bg-slate-900/50 p-3.5 rounded-xl border border-slate-800/80">
+                                <div class="flex justify-between items-center text-xs mb-1.5">
+                                    <label for="riskPctInput" class="text-slate-300 font-medium">Risk Per Trade</label>
+                                    <span id="riskQualityBadge" class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400">Optimal</span>
+                                </div>
+                                <div class="relative flex items-center">
+                                    <input type="number" id="riskPctInput" value="1.0" min="0.1" max="20" step="0.1"
+                                        class="w-full pl-3 pr-8 py-2 bg-slate-950 border border-slate-700/80 rounded-lg text-white font-mono text-sm focus:outline-none focus:border-emerald-500">
+                                    <span class="absolute right-3 text-slate-400 font-mono text-sm">%</span>
+                                </div>
+                                <input type="range" id="riskPctSlider" min="0.25" max="5.0" step="0.25" value="1.0" class="w-full mt-2.5">
+                            </div>
+
+                            <!-- Margin / Leverage Multiplier -->
+                            <div class="bg-slate-900/50 p-3.5 rounded-xl border border-slate-800/80">
+                                <div class="flex justify-between items-center text-xs mb-1.5">
+                                    <label for="leverageInput" class="text-slate-300 font-medium">Leverage (Margin)</label>
+                                    <span class="text-[10px] font-mono text-cyan-400" id="leverageLabel">5x MIS</span>
+                                </div>
+                                <div class="relative flex items-center">
+                                    <input type="number" id="leverageInput" value="5" min="1" max="20" step="1"
+                                        class="w-full pl-3 pr-8 py-2 bg-slate-950 border border-slate-700/80 rounded-lg text-white font-mono text-sm focus:outline-none focus:border-emerald-500">
+                                    <span class="absolute right-3 text-slate-400 font-mono text-sm">x</span>
+                                </div>
+                                <input type="range" id="leverageSlider" min="1" max="10" step="1" value="5" class="w-full mt-2.5">
+                            </div>
+                        </div>
+
+                        <!-- Entry, Stop-Loss, and Target Price Grid -->
+                        <div class="grid grid-cols-3 gap-3 pt-1">
+                            <!-- Entry Price -->
+                            <div>
+                                <label for="entryInput" class="block text-xs text-slate-300 font-medium mb-1.5">Entry Price</label>
+                                <div class="relative">
+                                    <span class="curr-symbol absolute left-2.5 top-2.5 text-slate-400 font-mono text-xs">₹</span>
+                                    <input type="number" id="entryInput" value="500" min="0.05" step="0.5"
+                                        class="w-full pl-6 pr-2 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white font-mono text-sm focus:outline-none focus:border-cyan-400">
+                                </div>
+                            </div>
+
+                            <!-- Stop Loss Price -->
+                            <div>
+                                <label for="slInput" class="block text-xs text-rose-400 font-medium mb-1.5">Stop-Loss</label>
+                                <div class="relative">
+                                    <span class="curr-symbol absolute left-2.5 top-2.5 text-rose-400/70 font-mono text-xs">₹</span>
+                                    <input type="number" id="slInput" value="485" min="0.05" step="0.5"
+                                        class="w-full pl-6 pr-2 py-2 bg-rose-950/20 border border-rose-500/40 rounded-xl text-rose-200 font-mono text-sm focus:outline-none focus:border-rose-400">
+                                </div>
+                            </div>
+
+                            <!-- Target Price -->
+                            <div>
+                                <label for="targetInput" class="block text-xs text-emerald-400 font-medium mb-1.5">Target Price</label>
+                                <div class="relative">
+                                    <span class="curr-symbol absolute left-2.5 top-2.5 text-emerald-400/70 font-mono text-xs">₹</span>
+                                    <input type="number" id="targetInput" value="545" min="0.05" step="0.5"
+                                        class="w-full pl-6 pr-2 py-2 bg-emerald-950/20 border border-emerald-500/40 rounded-xl text-emerald-200 font-mono text-sm focus:outline-none focus:border-emerald-400">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Quick R:R Target Setter Buttons -->
+                        <div class="flex items-center justify-between pt-1 text-xs">
+                            <span class="text-slate-400">Auto-Set Target by R:R:</span>
+                            <div class="flex gap-1.5 font-mono">
+                                <button onclick="setTargetByRR(1.5)" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 transition">1:1.5</button>
+                                <button onclick="setTargetByRR(2)" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 transition">1:2</button>
+                                <button onclick="setTargetByRR(3)" class="px-2.5 py-1 rounded-lg bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 transition">1:3</button>
+                                <button onclick="setTargetByRR(5)" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 transition">1:5</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card 2: Indian Brokerage, STT & Statutory Tax Estimator -->
+                <div class="glass-card rounded-2xl p-5 sm:p-6 shadow-xl">
+                    <button onclick="toggleTaxDetails()" class="w-full flex items-center justify-between text-left">
+                        <div class="flex items-center gap-2.5">
+                            <div class="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+                                <i class="ph-duotone ph-receipt text-lg"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                                    Statutory Charges & Net Profit
+                                    <span id="taxSegmentTag" class="text-[10px] font-mono px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300">NSE Intraday</span>
+                                </h3>
+                                <p class="text-xs text-slate-400">Brokerage, STT, NSE Txn, Stamp Duty & 18% GST</p>
+                            </div>
+                        </div>
+                        <i id="taxChevron" class="ph-bold ph-caret-down text-slate-400 transition-transform duration-200"></i>
+                    </button>
+
+                    <!-- Always-Visible Net Profit & Charges Summary Strip -->
+                    <div class="grid grid-cols-3 gap-2.5 mt-4 pt-4 border-t border-slate-800/80 text-center">
+                        <div class="bg-slate-900/70 p-2.5 rounded-xl border border-slate-800">
+                            <span class="block text-[11px] text-slate-400">Est. Taxes & Fees</span>
+                            <span id="totalChargesValue" class="font-mono text-sm font-bold text-amber-400">₹74.12</span>
+                        </div>
+                        <div class="bg-slate-900/70 p-2.5 rounded-xl border border-slate-800">
+                            <span class="block text-[11px] text-slate-400">Net Take-Home</span>
+                            <span id="netProfitValue" class="font-mono text-sm font-bold text-emerald-400">₹2,925.88</span>
+                        </div>
+                        <div class="bg-slate-900/70 p-2.5 rounded-xl border border-slate-800">
+                            <span class="block text-[11px] text-slate-400">Tax Breakeven</span>
+                            <span id="breakevenMoveValue" class="font-mono text-sm font-bold text-slate-200">+₹1.12</span>
+                        </div>
+                    </div>
+
+                    <!-- Collapsible Detailed Tax Breakdown -->
+                    <div id="taxBreakdownPanel" class="mt-4 pt-3 border-t border-slate-800/60 space-y-2 text-xs font-mono text-slate-300">
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">Total Turnover (Buy + Sell):</span>
+                            <span id="taxTurnover">₹69,485.00</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">Brokerage (Max ₹20/order or 0.03%):</span>
+                            <span id="taxBrokerage">₹20.85</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">STT (Securities Transaction Tax):</span>
+                            <span id="taxSTT">₹9.08</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">Exchange Txn + SEBI Charges:</span>
+                            <span id="taxExchange">₹2.45</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">Stamp Duty (Buy side):</span>
+                            <span id="taxStamp">₹1.00</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">GST (18% on Brok + Exch):</span>
+                            <span id="taxGST">₹4.19</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT PANEL (7 Cols): Real-Time KPIs + 100-Trade Monte Carlo Chart -->
+            <div class="lg:col-span-7 space-y-6">
+
+                <!-- Primary KPI Output Grid -->
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3.5">
+                    
+                    <!-- KPI 1: Exact Position Size (Quantity) -->
+                    <div class="glass-card rounded-2xl p-4 border-l-4 border-l-emerald-400 relative overflow-hidden">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-medium text-slate-400">Quantity to Trade</span>
+                            <i class="ph-duotone ph-stack text-emerald-400 text-lg"></i>
+                        </div>
+                        <div id="kpiQuantity" class="font-mono text-2xl sm:text-3xl font-bold text-white mt-1">66</div>
+                        <div id="kpiStopDistance" class="text-[11px] font-mono text-slate-400 mt-1">SL Distance: ₹15.00 (3.0%)</div>
+                    </div>
+
+                    <!-- KPI 2: Margin Required vs Total Position Value -->
+                    <div class="glass-card rounded-2xl p-4 border-l-4 border-l-cyan-400">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-medium text-slate-400">Margin Required</span>
+                            <i class="ph-duotone ph-wallet text-cyan-400 text-lg"></i>
+                        </div>
+                        <div id="kpiMarginReq" class="font-mono text-2xl sm:text-3xl font-bold text-white mt-1">₹6,600</div>
+                        <div id="kpiTotalExposure" class="text-[11px] font-mono text-slate-400 mt-1">Total Value: ₹33,000</div>
+                    </div>
+
+                    <!-- KPI 3: Risk-to-Reward Ratio -->
+                    <div class="glass-card rounded-2xl p-4 border-l-4 border-l-indigo-400 col-span-2 sm:col-span-1">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-medium text-slate-400">Risk : Reward Ratio</span>
+                            <i class="ph-duotone ph-scales text-indigo-400 text-lg"></i>
+                        </div>
+                        <div id="kpiRR" class="font-mono text-2xl sm:text-3xl font-bold text-emerald-400 mt-1">1 : 3.00</div>
+                        <div id="kpiMinWinrate" class="text-[11px] font-mono text-slate-400 mt-1">Min Win Rate: 25.0%</div>
+                    </div>
+
+                    <!-- KPI 4: Max Capital Risk -->
+                    <div class="glass-card rounded-2xl p-4 bg-rose-950/15 border border-rose-500/20">
+                        <span class="text-xs font-medium text-rose-300/80">Max Risk (If SL Hit)</span>
+                        <div id="kpiMaxRisk" class="font-mono text-xl font-bold text-rose-400 mt-1">-₹990.00</div>
+                        <div id="kpiRiskActualPct" class="text-[11px] font-mono text-rose-300/60 mt-0.5">0.99% of Capital</div>
+                    </div>
+
+                    <!-- KPI 5: Gross Reward (If Target Hit) -->
+                    <div class="glass-card rounded-2xl p-4 bg-emerald-950/15 border border-emerald-500/20">
+                        <span class="text-xs font-medium text-emerald-300/80">Gross Profit (Target)</span>
+                        <div id="kpiGrossProfit" class="font-mono text-xl font-bold text-emerald-400 mt-1">+₹2,970.00</div>
+                        <div id="kpiRoiOnCapital" class="text-[11px] font-mono text-emerald-300/60 mt-0.5">+2.97% Account Gain</div>
+                    </div>
+
+                    <!-- KPI 6: Share / Copy Setup Button Card -->
+                    <div class="glass-card rounded-2xl p-4 flex flex-col justify-between bg-gradient-to-br from-slate-900 to-slate-850">
+                        <span class="text-xs font-medium text-slate-300">Share Trade Plan</span>
+                        <button onclick="copyTradePlan()" class="mt-2 w-full py-2.5 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 transition">
+                            <i class="ph-bold ph-copy text-sm"></i>
+                            <span>Copy Trade Summary</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Visual Risk vs Reward Zone Bar -->
+                <div class="glass-card rounded-2xl p-4">
+                    <div class="flex justify-between text-xs font-mono mb-2">
+                        <span class="text-rose-400" id="barRiskLabel">STOP LOSS ZONE (1R)</span>
+                        <span class="text-slate-400" id="barEntryLabel">ENTRY: ₹500</span>
+                        <span class="text-emerald-400" id="barRewardLabel">TARGET ZONE (3.0R)</span>
+                    </div>
+                    <div class="w-full h-3.5 rounded-full bg-slate-900 overflow-hidden flex p-0.5 border border-slate-800">
+                        <div id="visualRiskBar" class="h-full bg-gradient-to-r from-rose-600 to-rose-400 rounded-l-full transition-all duration-300" style="width: 25%"></div>
+                        <div class="w-1 h-full bg-white"></div>
+                        <div id="visualRewardBar" class="h-full bg-gradient-to-r from-emerald-400 to-cyan-400 rounded-r-full transition-all duration-300" style="width: 75%"></div>
+                    </div>
+                </div>
+
+                <!-- Card 3: 100-Trade Monte Carlo & Compounding Simulator -->
+                <div class="glass-card rounded-2xl p-5 sm:p-6 shadow-xl">
+                    <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <i class="ph-duotone ph-chart-line-up text-cyan-400 text-xl"></i>
+                                <h2 class="text-base font-bold text-white">Monte Carlo & Compounding Simulator</h2>
+                            </div>
+                            <p class="text-xs text-slate-400">See how your current R:R performs over a series of trades with realistic winning/losing streaks</p>
+                        </div>
+
+                        <button onclick="runMonteCarloSimulation(true)" class="px-3.5 py-2 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 text-xs font-semibold flex items-center gap-2 transition">
+                            <i class="ph-bold ph-dice-five text-base"></i>
+                            <span>Simulate Random Streaks</span>
+                        </button>
+                    </div>
+
+                    <!-- Simulation Controls Strip -->
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5 bg-slate-900/60 p-3.5 rounded-xl border border-slate-800/80">
+                        <!-- Expected Win Rate % -->
+                        <div>
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="text-slate-300">Strategy Win Rate</span>
+                                <span id="simWinRateLabel" class="font-mono font-bold text-cyan-400">50%</span>
+                            </div>
+                            <input type="range" id="simWinRateSlider" min="20" max="85" step="5" value="50" class="w-full">
+                        </div>
+
+                        <!-- Number of Trades -->
+                        <div>
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="text-slate-300">Number of Trades</span>
+                                <span id="simTradesLabel" class="font-mono font-bold text-emerald-400">50 Trades</span>
+                            </div>
+                            <input type="range" id="simTradesSlider" min="20" max="150" step="10" value="50" class="w-full">
+                        </div>
+
+                        <!-- Position Sizing Mode -->
+                        <div>
+                            <span class="block text-xs text-slate-300 mb-1">Sizing Mode</span>
+                            <div class="grid grid-cols-2 gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
+                                <button onclick="setCompoundingMode(true)" id="comp-ON" class="py-1 rounded bg-emerald-500 text-slate-950 font-semibold transition">Compound %</button>
+                                <button onclick="setCompoundingMode(false)" id="comp-OFF" class="py-1 rounded text-slate-400 hover:text-white transition">Fixed Risk</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Responsive Chart Container -->
+                    <div class="relative w-full h-64 sm:h-72 bg-slate-950/60 rounded-xl p-3 border border-slate-800/80">
+                        <canvas id="equityChart"></canvas>
+                    </div>
+
+                    <!-- Simulation Summary KPIs -->
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-3 border-t border-slate-800/80">
+                        <div>
+                            <span class="text-[11px] text-slate-400 block">Simulated Ending Equity</span>
+                            <span id="simEndingBalance" class="font-mono text-base font-bold text-cyan-400">₹1,64,200</span>
+                        </div>
+                        <div>
+                            <span class="text-[11px] text-slate-400 block">Simulated Net ROI</span>
+                            <span id="simNetRoi" class="font-mono text-base font-bold text-emerald-400">+64.2%</span>
+                        </div>
+                        <div>
+                            <span class="text-[11px] text-slate-400 block">Max Simulated Drawdown</span>
+                            <span id="simMaxDrawdown" class="font-mono text-base font-bold text-rose-400">-5.8%</span>
+                        </div>
+                        <div>
+                            <span class="text-[11px] text-slate-400 block">Edge Expectancy / Trade</span>
+                            <span id="simExpectancy" class="font-mono text-base font-bold text-white">+1.00R</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <!-- Application Logic -->
+    <script>
+        // --- Global Application State ---
+        const state = {
+            marketMode: 'INTRADAY', // INTRADAY, DELIVERY, FNO, GLOBAL
+            currency: 'INR',        // INR, USD
+            currencySymbol: '₹',
+            isCompounding: true,
+            showTaxDetails: true,
+            // Cached simulation outcomes so chart doesn't jump when only changing compounding toggle
+            randomOutcomes: []
+        };
+
+        let equityChartInstance = null;
+
+        // --- DOM Elements Reference ---
+        const els = {
+            capitalInput: document.getElementById('capitalInput'),
+            capitalSlider: document.getElementById('capitalSlider'),
+            riskPctInput: document.getElementById('riskPctInput'),
+            riskPctSlider: document.getElementById('riskPctSlider'),
+            leverageInput: document.getElementById('leverageInput'),
+            leverageSlider: document.getElementById('leverageSlider'),
+            entryInput: document.getElementById('entryInput'),
+            slInput: document.getElementById('slInput'),
+            targetInput: document.getElementById('targetInput'),
+            simWinRateSlider: document.getElementById('simWinRateSlider'),
+            simTradesSlider: document.getElementById('simTradesSlider')
+        };
+
+        // --- Formatting Helper ---
+        function formatMoney(amount, decimals = 0) {
+            if (!isFinite(amount)) return state.currencySymbol + '0';
+            const absVal = Math.abs(amount);
+            const locale = state.currency === 'INR' ? 'en-IN' : 'en-US';
+            const formatted = absVal.toLocaleString(locale, {
+                minimumFractionDigits: decimals,
+                maximumFractionDigits: decimals
+            });
+            return (amount < 0 ? '-' : '') + state.currencySymbol + formatted;
+        }
+
+        // --- Toast Notification Helper ---
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toastMessage').textContent = msg;
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 2600);
+        }
+
+        // --- Market Mode Preset Switcher ---
+        function setMarketMode(mode) {
+            state.marketMode = mode;
+            document.querySelectorAll('.mode-btn').forEach(btn => {
+                btn.className = 'mode-btn px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition-all';
+            });
+            const activeBtn = document.getElementById(`mode-${mode}`);
+            if (activeBtn) {
+                activeBtn.className = 'mode-btn px-3 py-1.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold transition-all';
+            }
+
+            const tag = document.getElementById('taxSegmentTag');
+            const levLabel = document.getElementById('leverageLabel');
+
+            if (mode === 'INTRADAY') {
+                els.leverageInput.value = 5;
+                els.leverageSlider.value = 5;
+                tag.textContent = 'NSE Intraday (MIS)';
+                levLabel.textContent = '5x MIS';
+            } else if (mode === 'DELIVERY') {
+                els.leverageInput.value = 1;
+                els.leverageSlider.value = 1;
+                tag.textContent = 'NSE Delivery (CNC)';
+                levLabel.textContent = '1x CNC';
+            } else if (mode === 'FNO') {
+                els.leverageInput.value = 1;
+                els.leverageSlider.value = 1;
+                tag.textContent = 'NSE F&O Options';
+                levLabel.textContent = 'Options Lot';
+            } else {
+                els.leverageInput.value = 2;
+                els.leverageSlider.value = 2;
+                tag.textContent = 'Standard 0.05% Fee';
+                levLabel.textContent = '2x Margin';
+            }
+            calculateAll(false);
+        }
+
+        // --- Currency Switcher ---
+        function setCurrency(curr) {
+            state.currency = curr;
+            state.currencySymbol = curr === 'INR' ? '₹' : '$';
+            document.querySelectorAll('.curr-symbol').forEach(el => el.textContent = state.currencySymbol);
+
+            const inrBtn = document.getElementById('curr-INR');
+            const usdBtn = document.getElementById('curr-USD');
+            if (curr === 'INR') {
+                inrBtn.className = 'px-2.5 py-1.5 rounded-lg bg-slate-800 text-emerald-400 font-bold transition-all';
+                usdBtn.className = 'px-2.5 py-1.5 rounded-lg text-slate-400 hover:text-white transition-all';
+            } else {
+                usdBtn.className = 'px-2.5 py-1.5 rounded-lg bg-slate-800 text-emerald-400 font-bold transition-all';
+                inrBtn.className = 'px-2.5 py-1.5 rounded-lg text-slate-400 hover:text-white transition-all';
+            }
+            calculateAll(false);
+        }
+
+        // --- Quick Capital Buttons ---
+        function setQuickCapital(val) {
+            els.capitalInput.value = val;
+            els.capitalSlider.value = val;
+            calculateAll(false);
+        }
+
+        // --- Auto-Set Target Price Based on Desired R:R ---
+        function setTargetByRR(rr) {
+            const entry = parseFloat(els.entryInput.value) || 0;
+            const sl = parseFloat(els.slInput.value) || 0;
+            const diff = Math.abs(entry - sl);
+            if (diff <= 0) return;
+
+            const isLong = entry >= sl;
+            const newTarget = isLong ? entry + (diff * rr) : Math.max(0.05, entry - (diff * rr));
+            els.targetInput.value = Number(newTarget.toFixed(2));
+            calculateAll(false);
+        }
+
+        // --- Toggle Tax Breakdown Accordion ---
+        function toggleTaxDetails() {
+            state.showTaxDetails = !state.showTaxDetails;
+            const panel = document.getElementById('taxBreakdownPanel');
+            const chevron = document.getElementById('taxChevron');
+            panel.style.display = state.showTaxDetails ? 'block' : 'none';
+            chevron.style.transform = state.showTaxDetails ? 'rotate(0deg)' : 'rotate(-90deg)';
+        }
+
+        // --- Set Compounding vs Fixed Risk Mode ---
+        function setCompoundingMode(isComp) {
+            state.isCompounding = isComp;
+            const onBtn = document.getElementById('comp-ON');
+            const offBtn = document.getElementById('comp-OFF');
+            if (isComp) {
+                onBtn.className = 'py-1 rounded bg-emerald-500 text-slate-950 font-semibold transition';
+                offBtn.className = 'py-1 rounded text-slate-400 hover:text-white transition';
+            } else {
+                offBtn.className = 'py-1 rounded bg-emerald-500 text-slate-950 font-semibold transition';
+                onBtn.className = 'py-1 rounded text-slate-400 hover:text-white transition';
+            }
+            runMonteCarloSimulation(false);
+        }
+
+        // --- Core Position Size & Indian Tax Calculation Engine ---
+        function calculateAll(regenerateRandom = false) {
+            const capital = Math.max(100, parseFloat(els.capitalInput.value) || 100000);
+            const riskPct = Math.max(0.05, parseFloat(els.riskPctInput.value) || 1.0);
+            const leverage = Math.max(1, parseFloat(els.leverageInput.value) || 1);
+            const entry = Math.max(0.01, parseFloat(els.entryInput.value) || 500);
+            let sl = Math.max(0.01, parseFloat(els.slInput.value) || 485);
+            const target = Math.max(0.01, parseFloat(els.targetInput.value) || 545);
+
+            // Prevent zero stop-loss distance
+            if (Math.abs(entry - sl) < 0.001) {
+                sl = entry * 0.99;
+            }
+
+            const isLong = entry >= sl;
+            const stopDistance = Math.abs(entry - sl);
+            const rewardDistance = isLong ? Math.max(0, target - entry) : Math.max(0, entry - target);
+
+            // Update Direction Badge
+            const dirBadge = document.getElementById('directionBadge');
+            if (isLong) {
+                dirBadge.className = 'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30';
+                dirBadge.innerHTML = '<i class="ph-bold ph-trend-up"></i><span>LONG (BUY)</span>';
+            } else {
+                dirBadge.className = 'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30';
+                dirBadge.innerHTML = '<i class="ph-bold ph-trend-down"></i><span>SHORT (SELL)</span>';
+            }
+
+            // Update Risk Quality Badge
+            const riskBadge = document.getElementById('riskQualityBadge');
+            if (riskPct <= 1.5) {
+                riskBadge.textContent = 'Conservative';
+                riskBadge.className = 'text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400';
+            } else if (riskPct <= 2.5) {
+                riskBadge.textContent = 'Moderate';
+                riskBadge.className = 'text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400';
+            } else {
+                riskBadge.textContent = 'Aggressive';
+                riskBadge.className = 'text-[10px] font-mono px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-400';
+            }
+
+            document.getElementById('leverageLabel').textContent = `${leverage}x Margin`;
+
+            // Calculate Quantity & Position Value
+            const maxRiskAllowed = capital * (riskPct / 100);
+            let qty = Math.floor(maxRiskAllowed / stopDistance);
+            if (qty < 1) qty = 1;
+
+            const totalExposure = qty * entry;
+            const marginRequired = totalExposure / leverage;
+            const actualRisk = qty * stopDistance;
+            const grossProfit = qty * rewardDistance;
+            const rrRatio = stopDistance > 0 ? (rewardDistance / stopDistance) : 0;
+            const minWinRate = rrRatio > 0 ? (1 / (1 + rrRatio)) * 100 : 100;
+
+            // Update KPI Cards
+            document.getElementById('kpiQuantity').textContent = qty.toLocaleString('en-IN');
+            const slPct = ((stopDistance / entry) * 100).toFixed(2);
+            document.getElementById('kpiStopDistance').textContent = `SL Dist: ${formatMoney(stopDistance, 2)} (${slPct}%)`;
+
+            document.getElementById('kpiMarginReq').textContent = formatMoney(marginRequired, 0);
+            document.getElementById('kpiTotalExposure').textContent = `Position Value: ${formatMoney(totalExposure, 0)}`;
+
+            document.getElementById('kpiRR').textContent = `1 : ${rrRatio.toFixed(2)}`;
+            document.getElementById('kpiMinWinrate').textContent = `Breakeven Win Rate: ${minWinRate.toFixed(1)}%`;
+
+            document.getElementById('kpiMaxRisk').textContent = '-' + formatMoney(actualRisk, 2);
+            document.getElementById('kpiRiskActualPct').textContent = `${((actualRisk / capital) * 100).toFixed(2)}% of Capital`;
+
+            document.getElementById('kpiGrossProfit').textContent = '+' + formatMoney(grossProfit, 2);
+            document.getElementById('kpiRoiOnCapital').textContent = `+${((grossProfit / capital) * 100).toFixed(2)}% Account Gain`;
+
+            // Update Visual R:R Progress Bar
+            const totalZone = 1 + Math.max(0.1, rrRatio);
+            const riskWidth = Math.min(85, Math.max(12, (1 / totalZone) * 100));
+            const rewardWidth = 100 - riskWidth;
+            document.getElementById('visualRiskBar').style.width = `${riskWidth}%`;
+            document.getElementById('visualRewardBar').style.width = `${rewardWidth}%`;
+            document.getElementById('barEntryLabel').textContent = `ENTRY: ${formatMoney(entry, 2)}`;
+            document.getElementById('barRewardLabel').textContent = `TARGET (${rrRatio.toFixed(1)}R)`;
+
+            // --- Indian Brokerage & Statutory Tax Calculation ---
+            const buyTurnover = qty * entry;
+            const sellTurnover = qty * target;
+            const totalTurnover = buyTurnover + sellTurnover;
+
+            let brokerage = 0;
+            let stt = 0;
+            let exchangeFee = 0;
+            let stampDuty = 0;
+
+            if (state.marketMode === 'INTRADAY') {
+                brokerage = Math.min(20, buyTurnover * 0.0003) + Math.min(20, sellTurnover * 0.0003);
+                stt = sellTurnover * 0.00025; // 0.025% on sell side
+                exchangeFee = totalTurnover * 0.0000335; // NSE + SEBI
+                stampDuty = buyTurnover * 0.00003; // 0.003% on buy
+            } else if (state.marketMode === 'DELIVERY') {
+                brokerage = 0; // Zero brokerage standard on CNC
+                stt = totalTurnover * 0.001; // 0.1% on both buy and sell
+                exchangeFee = totalTurnover * 0.0000335;
+                stampDuty = buyTurnover * 0.00015; // 0.015% on buy
+            } else if (state.marketMode === 'FNO') {
+                brokerage = 40; // Flat ₹20 buy + ₹20 sell
+                stt = sellTurnover * 0.000625; // Options sell STT
+                exchangeFee = totalTurnover * 0.0005;
+                stampDuty = buyTurnover * 0.00003;
+            } else {
+                // Global / Crypto standard 0.05% maker/taker
+                brokerage = totalTurnover * 0.0005;
+                stt = 0;
+                exchangeFee = 0;
+                stampDuty = 0;
+            }
+
+            const gst = (brokerage + exchangeFee) * 0.18;
+            const totalCharges = brokerage + stt + exchangeFee + stampDuty + gst;
+            const netProfit = grossProfit - totalCharges;
+            const breakevenMove = qty > 0 ? (totalCharges / qty) : 0;
+
+            document.getElementById('totalChargesValue').textContent = formatMoney(totalCharges, 2);
+            const netEl = document.getElementById('netProfitValue');
+            netEl.textContent = (netProfit >= 0 ? '+' : '') + formatMoney(netProfit, 2);
+            netEl.className = `font-mono text-sm font-bold ${netProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`;
+            document.getElementById('breakevenMoveValue').textContent = `+${formatMoney(breakevenMove, 2)}`;
+
+            document.getElementById('taxTurnover').textContent = formatMoney(totalTurnover, 2);
+            document.getElementById('taxBrokerage').textContent = formatMoney(brokerage, 2);
+            document.getElementById('taxSTT').textContent = formatMoney(stt, 2);
+            document.getElementById('taxExchange').textContent = formatMoney(exchangeFee, 2);
+            document.getElementById('taxStamp').textContent = formatMoney(stampDuty, 2);
+            document.getElementById('taxGST').textContent = formatMoney(gst, 2);
+
+            // Store calculated metrics for Monte Carlo simulator & clipboard export
+            state.currentCalc = {
+                capital, riskPct, leverage, entry, sl, target, isLong,
+                qty, marginRequired, actualRisk, grossProfit, netProfit, totalCharges, rrRatio
+            };
+
+            runMonteCarloSimulation(regenerateRandom);
+        }
+
+        // --- 100-Trade Monte Carlo & Compounding Equity Curve Engine ---
+        function runMonteCarloSimulation(regenerateRandom = false) {
+            const { capital, riskPct, rrRatio } = state.currentCalc;
+            const winRate = parseFloat(els.simWinRateSlider.value) / 100;
+            const numTrades = parseInt(els.simTradesSlider.value, 10);
+
+            document.getElementById('simWinRateLabel').textContent = `${Math.round(winRate * 100)}%`;
+            document.getElementById('simTradesLabel').textContent = `${numTrades} Trades`;
+
+            // Generate or reuse random win/loss sequence
+            if (regenerateRandom || state.randomOutcomes.length < numTrades) {
+                state.randomOutcomes = [];
+                for (let i = 0; i < 200; i++) {
+                    state.randomOutcomes.push(Math.random() < winRate);
+                }
+            }
+
+            const labels = ['Start'];
+            const smoothCurve = [capital];
+            const monteCarloCurve = [capital];
+
+            // Expectancy in R per trade: (WinRate * RR) - ((1 - WinRate) * 1)
+            const expectancyR = (winRate * rrRatio) - (1 - winRate);
+
+            let currentSmooth = capital;
+            let currentMC = capital;
+            let peakMC = capital;
+            let maxDrawdownPct = 0;
+
+            const riskFraction = riskPct / 100;
+
+            for (let i = 1; i <= numTrades; i++) {
+                labels.push(`#${i}`);
+                const isWin = state.randomOutcomes[i - 1];
+
+                if (state.isCompounding) {
+                    // Smooth theoretical curve grows by expectancy * riskFraction
+                    currentSmooth = currentSmooth * (1 + (expectancyR * riskFraction));
+                    // Monte Carlo curve experiences real streaks
+                    const tradeReturnPct = isWin ? (rrRatio * riskFraction) : -riskFraction;
+                    currentMC = Math.max(0, currentMC * (1 + tradeReturnPct));
+                } else {
+                    // Fixed Capital Risk Mode
+                    const fixedRiskAmt = capital * riskFraction;
+                    currentSmooth = currentSmooth + (expectancyR * fixedRiskAmt);
+                    const tradePnl = isWin ? (fixedRiskAmt * rrRatio) : -fixedRiskAmt;
+                    currentMC = Math.max(0, currentMC + tradePnl);
+                }
+
+                smoothCurve.push(Math.round(currentSmooth));
+                monteCarloCurve.push(Math.round(currentMC));
+
+                if (currentMC > peakMC) peakMC = currentMC;
+                const dd = peakMC > 0 ? ((peakMC - currentMC) / peakMC) * 100 : 0;
+                if (dd > maxDrawdownPct) maxDrawdownPct = dd;
+            }
+
+            // Update Simulation KPIs below chart
+            const finalMC = monteCarloCurve[monteCarloCurve.length - 1];
+            const netRoiPct = ((finalMC - capital) / capital) * 100;
+
+            document.getElementById('simEndingBalance').textContent = formatMoney(finalMC, 0);
+            const roiEl = document.getElementById('simNetRoi');
+            roiEl.textContent = `${netRoiPct >= 0 ? '+' : ''}${netRoiPct.toFixed(1)}%`;
+            roiEl.className = `font-mono text-base font-bold ${netRoiPct >= 0 ? 'text-emerald-400' : 'text-rose-400'}`;
+
+            document.getElementById('simMaxDrawdown').textContent = `-${maxDrawdownPct.toFixed(1)}%`;
+            const expEl = document.getElementById('simExpectancy');
+            expEl.textContent = `${expectancyR >= 0 ? '+' : ''}${expectancyR.toFixed(2)}R`;
+            expEl.className = `font-mono text-base font-bold ${expectancyR >= 0 ? 'text-emerald-400' : 'text-rose-400'}`;
+
+            renderEquityChart(labels, smoothCurve, monteCarloCurve);
+        }
+
+        // --- Render or Update Chart.js Instance ---
+        function renderEquityChart(labels, smoothData, mcData) {
+            const ctx = document.getElementById('equityChart').getContext('2d');
+
+            if (equityChartInstance) {
+                equityChartInstance.data.labels = labels;
+                equityChartInstance.data.datasets[0].data = mcData;
+                equityChartInstance.data.datasets[1].data = smoothData;
+                equityChartInstance.update('none');
+                return;
+            }
+
+            const gradientCyan = ctx.createLinearGradient(0, 0, 0, 260);
+            gradientCyan.addColorStop(0, 'rgba(34, 211, 238, 0.28)');
+            gradientCyan.addColorStop(1, 'rgba(34, 211, 238, 0.0)');
+
+            equityChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Monte Carlo Streak Simulation',
+                            data: mcData,
+                            borderColor: '#22d3ee',
+                            backgroundColor: gradientCyan,
+                            borderWidth: 2.5,
+                            pointRadius: 0,
+                            pointHoverRadius: 5,
+                            tension: 0.25,
+                            fill: true
+                        },
+                        {
+                            label: 'Theoretical Expectancy Curve',
+                            data: smoothData,
+                            borderColor: '#10b981',
+                            borderDash: [5, 5],
+                            borderWidth: 2,
+                            pointRadius: 0,
+                            tension: 0.25,
+                            fill: false
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: {
+                            labels: {
+                                color: '#94a3b8',
+                                font: { family: 'Inter', size: 11 },
+                                boxWidth: 12
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: '#0f172a',
+                            titleColor: '#f8fafc',
+                            bodyColor: '#cbd5e1',
+                            borderColor: '#334155',
+                            borderWidth: 1,
+                            callbacks: {
+                                label: function(context) {
+                                    return `${context.dataset.label}: ${formatMoney(context.parsed.y, 0)}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(255, 255, 255, 0.04)' },
+                            ticks: { color: '#64748b', maxTicksLimit: 8, font: { family: 'JetBrains Mono', size: 10 } }
+                        },
+                        y: {
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: {
+                                color: '#64748b',
+                                font: { family: 'JetBrains Mono', size: 10 },
+                                callback: function(val) {
+                                    return formatMoney(val, 0);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // --- Copy Formatted Trade Plan to Clipboard (iFrame Safe) ---
+        function copyTradePlan() {
+            const c = state.currentCalc;
+            const dir = c.isLong ? 'LONG (BUY)' : 'SHORT (SELL)';
+            const summaryText = [
+                `📊 *TradeEdge Pro Setup (${state.marketMode})*`,
+                `• Direction: ${dir}`,
+                `• Entry: ${formatMoney(c.entry, 2)} | SL: ${formatMoney(c.sl, 2)} | Target: ${formatMoney(c.target, 2)}`,
+                `• Position Size: ${c.qty} Qty (Margin: ${formatMoney(c.marginRequired, 0)})`,
+                `• Risk: -${formatMoney(c.actualRisk, 2)} (${c.riskPct}%) | Reward: +${formatMoney(c.grossProfit, 2)}`,
+                `• Risk-to-Reward: 1 : ${c.rrRatio.toFixed(2)}`,
+                `• Est. Net Profit (After Tax): +${formatMoney(c.netProfit, 2)}`
+            ].join('\n');
+
+            const textArea = document.createElement('textarea');
+            textArea.value = summaryText;
+            textArea.style.position = 'fixed';
+            textArea.style.opacity = '0';
+            document.body.appendChild(textArea);
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                showToast('Trade setup copied! Ready to paste in Telegram / Discord.');
+            } catch (err) {
+                showToast('Unable to copy automatically.');
+            }
+            document.body.removeChild(textArea);
+        }
+
+        // --- Sync Sliders and Number Inputs ---
+        function bindInputPair(numEl, sliderEl) {
+            numEl.addEventListener('input', () => {
+                sliderEl.value = numEl.value;
+                calculateAll(false);
+            });
+            sliderEl.addEventListener('input', () => {
+                numEl.value = sliderEl.value;
+                calculateAll(false);
+            });
+        }
+
+        window.onload = function() {
+            bindInputPair(els.capitalInput, els.capitalSlider);
+            bindInputPair(els.riskPctInput, els.riskPctSlider);
+            bindInputPair(els.leverageInput, els.leverageSlider);
+
+            [els.entryInput, els.slInput, els.targetInput].forEach(el => {
+                el.addEventListener('input', () => calculateAll(false));
+            });
+
+            els.simWinRateSlider.addEventListener('input', () => runMonteCarloSimulation(true));
+            els.simTradesSlider.addEventListener('input', () => runMonteCarloSimulation(false));
+
+            // Initial Calculation & Chart Render
+            calculateAll(true);
+        };
+    </script>
+</body>
+</html>
